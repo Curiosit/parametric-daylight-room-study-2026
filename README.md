@@ -16,6 +16,10 @@ Every configuration in this dataset is **exactly compliant** with the 1/8 (12.5%
 
 ---
 
+![Example simulation output](study/da-grids/iteration_0013.png)
+*Example simulation output*
+
+---
 ## Contents
 
 ```

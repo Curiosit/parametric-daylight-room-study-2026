@@ -1,4 +1,3 @@
-
 <div align="center">
 
 # Parametric Daylight Room Study 2026
@@ -8,97 +7,171 @@
 
 </div>
 
-Supporting dataset for a study of the **1/8 Window-to-Floor Ratio (WFR)** rule under climate-based daylight modelling, covering **4,320 single-side-lit residential room configurations** in Warsaw and Berlin.
+Dataset and code for a study of the **1/8 window-to-floor ratio (WFR)** rule under climate-based daylight modelling. The study covers **7,200 single-side-lit residential room configurations** in Warsaw and Berlin, simulated in three batches, plus a convergence check of the Radiance parameters.
 
-Every configuration in this dataset is **exactly compliant** with the 1/8 (12.5%) WFR requirement found in the Polish *Warunki techniczne* and the German *Musterbauordnung*. The dataset records what that compliance actually delivers in terms of spatial Daylight Autonomy (sDA<sub>300/50%</sub>) and Annual Sunlight Exposure (ASE<sub>1000,250</sub>) as room geometry, façade orientation and street canyon density vary.
+The 1/8 rule appears in the Polish *Warunki techniczne* and the German *Musterbauordnung*. Every configuration in the baseline batch complies with it exactly. The dataset records what that compliance delivers in terms of spatial daylight autonomy (sDA<sub>300/50%</sub>) and annual sunlight exposure (ASE<sub>1000,250</sub>), as room geometry, window position, facade orientation and street canyon density vary.
 
-> **Status:** the associated manuscript is under double-anonymous peer review. Author, affiliation and citation metadata will be added to this repository once the review process concludes.
+> **Status:** the associated manuscript is under peer review. Citation metadata will be added once the review process concludes.
+>
+> **Corrections:** this version replaces the dataset released with the original submission. See [CORRECTION.md](CORRECTION.md) for what changed and why.
+
+![Daylight autonomy in one room facing south and north, unobstructed and in a street canyon](docs/figure_03.png)
+*Daylight autonomy DA<sub>300</sub> in one room (5.0 × 6.0 m, Warsaw), facing south and north, unobstructed and at H/W = 1.0. The white line marks DA<sub>300</sub> = 50%; the area inside it is counted in sDA<sub>300/50%</sub>.*
 
 ---
 
-![Example simulation output](study/da-grids/iteration_0013.png)
-*Example simulation output*
-
----
 ## Contents
 
 ```
 .
 ├── README.md
-└── study/
-    ├── study.xlsx              # 4,320 simulation records (single sheet, 25 columns)
-    └── da-grids/
-        └── iteration_0000.png … iteration_4319.png   # per-case daylight autonomy grid renders
+├── CORRECTION.md                 what changed since the original submission
+├── LICENSE                       code: MIT
+├── LICENSE-DATA                  data and figures: CC BY 4.0
+├── requirements.txt
+├── study/
+│   ├── A-baseline.xlsx           Batch A, 4,320 configurations
+│   ├── B-sill-control.xlsx       Batch B,   720 configurations
+│   ├── C-wfr-x-vt.xlsx           Batch C, 2,160 configurations
+│   ├── D-ab-sweep.xlsx           convergence check, 48 simulations
+│   └── da-grids/                 one image per configuration (generated, see below)
+│       ├── A/  A-00000.png … A-04319.png
+│       ├── B/  B-00000.png … B-00719.png
+│       └── C/  C-00000.png … C-02159.png
+├── scripts/
+│   ├── common.py                 shared loaders, constants and metric functions
+│   ├── check_metrics.py          recomputes every stored metric from the per-sensor arrays
+│   └── render_da_grids.py        renders the 7,200 daylight autonomy images
+├── figures/
+│   ├── make_all_figures.py       regenerates every manuscript figure
+│   ├── fig03_room_plans.py … fig16_17_aperture_vertical.py
+│   ├── graphical_abstract.py
+│   └── output/                   Figure_03.png/.pdf … Figure_17.png/.pdf
+└── docs/                         images used in this README
 ```
 
-`iteration_NNNN.png` maps 1:1 onto the `Iteration_Nr` column of `study.xlsx` (0–4319, unique).
+---
+
+## Quick start
+
+All scripts are run from the repository root.
+
+```bash
+pip install -r requirements.txt
+
+python scripts/check_metrics.py        # verify every stored metric (about 1 min)
+python figures/make_all_figures.py     # regenerate Figures 3 to 17 (about 1 min)
+python scripts/render_da_grids.py      # render all 7,200 images (see below)
+```
+
+### Rendering the daylight autonomy images
+
+`render_da_grids.py` draws one image per configuration into `study/da-grids/<batch>/<case_id>.png`: the room in plan with north up, the window, the opposing building when the street is obstructed, the DA<sub>300</sub> = 50% line, and the parameters and metrics of the case.
+
+![Example image for one configuration](docs/example_da_grid.png)
+
+The script runs in chunks on several processes and can be stopped and restarted at any time: images that already exist are skipped. It renders about 10 images per second per core, so the full set takes roughly 12 minutes on one core and a few minutes on a multi-core machine.
+
+```bash
+python scripts/render_da_grids.py                          # all three batches
+python scripts/render_da_grids.py --batches A              # one batch
+python scripts/render_da_grids.py --batches C --start 0 --stop 500
+python scripts/render_da_grids.py --cases A-00076 A-01156  # specific cases
+python scripts/render_da_grids.py --workers 4 --chunk 500 --dpi 100
+python scripts/render_da_grids.py --overwrite              # re-render existing images
+```
+
+The complete set is about 330 MB. It can be generated with the script, or downloaded as `da-grids.zip` from the Releases page of this repository.
 
 ---
 
-## Design space
+## Study design
 
-The simulation sweeps six independent parameters. Glazing area is recomputed for every permutation so that the window is always exactly 12.5% of the floor area.
+| File | Batch | Configurations | Climate | Purpose |
+|---|---|---|---|---|
+| `A-baseline.xlsx` | A | 4,320 | Warsaw, Berlin | Full factorial at the prescribed 1/8 ratio |
+| `B-sill-control.xlsx` | B | 720 | Berlin | Separates window clear height from sill position |
+| `C-wfr-x-vt.xlsx` | C | 2,160 | Warsaw | Window-to-floor ratio × glazing transmittance; vertical sensor planes at eye height |
+| `D-ab-sweep.xlsx` | D | 48 | Warsaw | Convergence check of the ambient bounce setting (`-ab 3`, `5`, `8`) |
 
-| Parameter | Values | Levels |
-|---|---|---|
-| Location (EPW) | Warsaw-Okęcie (123750), Berlin (103840) | 2 |
-| Façade orientation | South 0°, West 90°, North 180°, East 270° | 4 |
-| Room width | 3.0 – 7.0 m, 0.5 m steps | 9 |
-| Room depth | 3.0 – 7.0 m, 1.0 m steps | 5 |
-| Window head height | 1.4, 1.7, 2.0 m | 3 |
-| Street aspect ratio H/W | 0.0, 0.5, 1.0, 1.5 | 4 |
-| **Total** | | **4,320** |
+### Parameters
 
-Fixed across all cases: floor-to-ceiling height 2.7 m; sill height 0.8 m; window centred on the exterior wall and recessed 0.15 m; canyon street width 15 m with opposing block height varied to meet the target H/W; glazing visible transmittance 0.65; reflectances — ceiling 0.8, wall 0.5, floor 0.2, ground 0.1, façade 0.2.
+| Parameter | Batch A | Batch B | Batch C |
+|---|---|---|---|
+| Room width (m) | 3.0 to 7.0, step 0.5 (9) | 3.0, 5.0, 7.0 | 3.0, 5.0, 7.0 |
+| Room depth (m) | 3 to 7, step 1 (5) | 3 to 7 | 3 to 7 |
+| Window clear height (m) | 1.4, 1.7, 2.0 | 1.4, 1.7, 2.0 | 1.7 |
+| Sill height (m) | 0.80 for 1.4 and 1.7; 0.67 for 2.0 | 0.67 for all | 0.80 |
+| Orientation | South, East, North, West | same | same |
+| Street aspect ratio H/W | 0.0, 0.5, 1.0, 1.5 | same | same |
+| Window-to-floor ratio | 1/8 | 1/8 | 1/8, 1/6, 1/5 |
+| Glazing VT | 0.64 | 0.64 | 0.64, 0.70, 0.76 |
+| Climate | Warsaw, Berlin | Berlin | Warsaw |
+
+**Window clear height** is measured from sill to head. Because the glazing area is fixed by the ratio, the clear height also fixes the window width (glazing area / clear height). In Batch A the sill was lowered to 0.67 m for the 2.0 m clear height, because a 0.80 m sill would place the window head above the ceiling. Batch B repeats all three clear heights at the same 0.67 m sill, which separates the two effects. No configuration in any batch has a window wider than the facade or a head above the ceiling.
+
+**Fixed in all batches:** floor-to-ceiling height 2.70 m; window centred on the exterior wall and recessed 0.15 m; street width 15 m, with the opposing building height set to reach the target H/W (0, 7.5, 15.0 and 22.5 m); room at ground-floor level; reflectances ceiling 0.8, wall 0.5, floor 0.2, ground 0.1, facade 0.2.
 
 ---
 
-## Data dictionary — `study/study.xlsx`
+## Data dictionary
 
-One row per simulated configuration (4,320 rows + header, sheet `Arkusz1`).
+One row per configuration, sheet `Arkusz1`. All metrics are in percent (0 to 100).
 
-### Case identification and inputs
+### Shared columns
 
-| Column | Type | Description |
-|---|---|---|
-| `Iteration_Nr` | int | Case index, 0–4319. Matches the `da-grids` image filename. |
-| `DateTime` | datetime | Timestamp of the solver run. |
-| `Location` | text | `Warsaw` or `Berlin`. |
-| `Iteration_Name` | text | Encoded parameter combination, e.g. `Width0_Depth0_Window_height0_Urban_Canyon0_Direction0`. |
-| `Win height` | float | Window head height in m (1.4 / 1.7 / 2.0). |
-| `Depth` | int | Room depth in m (3–7). |
-| `Width` | float | Room width in m (3.0–7.0). |
-| `Area` | float | **Total enclosing surface area of the room in m² — not the floor area.** See the note below. |
-| `Window area` | float | Glazed area in m². Always equals `Depth × Width / 8`. |
-| `rotation` | int | Orientation **index**, not degrees: `0` = South (0°), `1` = West (90°), `2` = North (180°), `3` = East (270°). |
-| `urban canyon toggle` | int | Density tier **index**, not the ratio itself: `0` = H/W 0.0 (unobstructed), `1` = H/W 0.5, `2` = H/W 1.0, `3` = H/W 1.5. |
+| Column | Description |
+|---|---|
+| `case_id` | Unique ID, e.g. `A-00076`. Matches the image file name in `study/da-grids/`. |
+| `iteration`, `iteration_name`, `datetime` | Solver run index, encoded parameter combination and timestamp. |
+| `Location` | `Warsaw` or `Berlin` (Batch A only; Batches B and C use one climate, see `epw_file`). |
+| `width`, `depth` | Room width along the window wall and room depth, in m. |
+| `win_height` | Window clear height, sill to head, in m. |
+| `sill_h` | Sill height above floor, in m. |
+| `window_area` | Glazed area, in m². Equals `width × depth × WFR`. |
+| `rotation` | Orientation **index**: `0` South, `1` East, `2` North, `3` West. The model rotates counter-clockwise. |
+| `urban canyon toggle` | Street aspect ratio **index**: `0` H/W 0.0 (unobstructed), `1` 0.5, `2` 1.0, `3` 1.5. |
+| `VT`, `WFR` | Glazing visible transmittance and window-to-floor ratio. |
+| `epw_file` | Climate file used for the run. |
 
-> **Note on `Area`.** `Area` is the total internal surface area (floor + ceiling + four walls at 2.7 m height), which is why a 3.0 × 3.0 m room reports 50.4 m². The window-to-floor ratio is `Window area / (Depth × Width)` and equals 0.125 for every row. Dividing `Window area` by `Area` does **not** give the WFR.
+### Batches A and B
 
-### Results — `culled_*` columns are the reported metrics
+| Column | Description |
+|---|---|
+| `sDA` | sDA<sub>300/50%</sub> over the full floor area. **Reported in the manuscript.** |
+| `ASE_results` | ASE<sub>1000,250</sub> over the full floor area. **Reported in the manuscript.** |
+| `culled_sDA`, `ASE_culled_results` | The same metrics with a 0.5 m perimeter band removed. Sensitivity analysis only. |
+| `raw_DA`, `culled_raw_DA` | Per-sensor DA<sub>300</sub>, `;`-delimited. |
+| `raw_ASE_hours`, `raw_culled_ASE_hours` | Per-sensor hours above 1,000 lux of direct sun, `;`-delimited. |
 
-Two variants of each metric are stored: one over the **full** sensor grid, and one over the **culled** grid, from which a 0.5 m perimeter band along the interior walls has been removed in line with ANSI/IES LM-83 practice. **All values reported in the manuscript come from the culled columns.**
+### Batch C
 
-| Column | Reported? | Description |
-|---|---|---|
-| `sDA` | – | sDA<sub>300/50%</sub> over the full grid, in % (0–100). |
-| `culled_sDA` | **yes** | sDA<sub>unshaded;300/50%</sub> over the culled grid, in % (0–100). |
-| `aDA` / `culled_aDA` | – | Mean daylight autonomy across the respective grid, in %. |
-| `ASE_results` | – | ASE<sub>1000,250</sub> over the full grid, as a **fraction 0–1**. |
-| `ASE_culled_results` | **yes** | ASE<sub>1000,250</sub> over the culled grid, as a **fraction 0–1**. Multiply by 100 for the percentages quoted in the manuscript. |
-| `raw_DA` / `culled_raw_DA` | – | Per-sensor daylight autonomy, `;`-delimited, in %. |
-| `raw_UDI` / `culled_raw_UDI` | – | Per-sensor Useful Daylight Illuminance, `;`-delimited, in %. |
-| `raw_cDA` / `culled_raw_cDA` | – | Per-sensor continuous daylight autonomy, `;`-delimited, in %. |
-| `raw_ASE_hours` / `raw_culled_ASE_hours` | – | Per-sensor count of hours above 1,000 lx of direct sun, `;`-delimited. |
+| Column | Description |
+|---|---|
+| `ratio` | Denominator of the window-to-floor ratio: `8`, `6` or `5`. |
+| `sDA-horizontal`, `ASE_results-horizontal` | Metrics on the work plane at 0.8 m. |
+| `raw_DA-horizontal`, `raw_ASE_hours-horizontal` | Per-sensor values on the work plane. |
+| `sDA_vert_south_facing`, `sDA_vert_north_facing` | The sDA criterion (DA<sub>300</sub> ≥ 50%) applied to vertical sensors at 1.2 m facing south and north. |
+| `raw_DA_vert_*`, `raw_ASE_hours_vert_*`, `ASE_vert_*` | Per-sensor and plane-level values for the vertical planes. |
 
-### Sensor grid conventions
+Both vertical planes face south and north in every configuration, whatever the facade orientation. In south- and north-facing rooms they are therefore the planes facing towards and away from the window; the manuscript restricts the vertical analysis to these 1,080 configurations.
 
-Workplane height 0.8 m, grid spacing 0.25 m.
+### Batch D (convergence check)
 
-- Full grid point count = `(Depth / 0.25) × (Width / 0.25)` — e.g. 144 points for a 3.0 × 3.0 m room, 784 for 7.0 × 7.0 m.
-- Culled grid point count = `((Depth − 1) / 0.25) × ((Width − 1) / 0.25)` — the 0.5 m band is removed on all four sides.
-- The `ASE_*` fractions are exactly (sensors exceeding the threshold) / (sensors in that grid); e.g. `ASE_culled_results = 0.234375` for case 0 is 15 of 64 culled sensors.
-- Point ordering in the `;`-delimited fields follows the grid output of the parametric definition: *[to be stated explicitly — origin corner and traversal direction]*.
+Sixteen Batch A configurations, each simulated with `-ab 3`, `-ab 5` and `-ab 8`. Columns follow Batches A and B, plus `batch_a_case_id` (the Batch A configuration), `ab` (3, 5 or 8), `radiance_parameters` and `mean_DA` (mean DA<sub>300</sub> over the full grid). Compare values **within** Batch D only. It is a separate simulation run: the `-ab 5` results reproduce Batch A sDA within 0.6 percentage points, but ASE in south-facing configurations differs from Batch A by up to 4.7 points (north-facing configurations match exactly). Within Batch D, ASE is identical at all three settings.
+
+---
+
+## Metric conventions
+
+- **sDA<sub>300/50%</sub>:** share of sensors with DA<sub>300</sub> **≥ 50%** of occupied hours.
+- **ASE<sub>1000,250</sub>:** share of sensors receiving more than 1,000 lux of direct sun for **more than 250 hours**.
+- **Analysis area:** the full regularly occupied floor area, as defined in ANSI/IES LM-83-23. The culled variants (0.5 m band removed) are provided for sensitivity analysis.
+- **Sensor grid:** work plane at 0.8 m, spacing 0.25 m, `(width / 0.25) × (depth / 0.25)` sensors.
+- **Sensor order** in the `;`-delimited horizontal arrays is width-major: index `k = i × n_depth + j`, with `i` along the window wall and `j` from the window wall (`j = 0`) to the back wall. `scripts/common.py` provides `grid()` to reshape an array.
+- The per-sensor order of the **vertical** arrays in Batch C has not been verified against the horizontal grid. Plane-level metrics do not depend on it; spatial maps of the vertical planes should not be drawn from these arrays without checking.
+
+`python scripts/check_metrics.py` recomputes every stored metric from the per-sensor arrays and reports any difference.
 
 ---
 
@@ -106,38 +179,36 @@ Workplane height 0.8 m, grid spacing 0.25 m.
 
 | Item | Setting |
 |---|---|
-| Modelling environment | Rhinoceros 3D / Grasshopper |
-| Simulation toolset | Ladybug Tools (Ladybug + Honeybee), iterated with Colibri |
-| Engine | Radiance |
-| Radiance parameters | `-ab 5 -ad 5000 -lw 2e-05` |
-| Sky | Perez All-Weather model via `gendaymtx`, Tregenza subdivision (145 sky patches + 1 ground patch, `gendaymtx -m 1`) |
+| Modelling environment | Rhinoceros 3D / Grasshopper, iterated with Colibri |
+| Simulation toolset | Ladybug Tools 1.10.0 (Ladybug + Honeybee) |
+| Recipe | `annual-daylight-enhanced` (enhanced two-phase method) |
+| Diffuse component | Daylight coefficients, Tregenza subdivision (145 sky patches + 1 ground patch, `gendaymtx -m 1`), Perez All-Weather sky, `-ab 5 -ad 5000 -lw 2e-05` |
+| Direct solar component | Rays traced from each sensor to the hourly sun position, without interreflection. ASE is computed from this component. |
 | Climate files | EnergyPlus EPW: Warsaw-Okęcie (123750), Berlin (103840) |
-| Evaluation window | 08:00–18:00, per ANSI/IES LM-83-23 |
-| Shading | None. Metrics are unshaded — no dynamic blind model is applied. |
+| Evaluation window | 08:00 to 18:00, per ANSI/IES LM-83-23 |
+| Shading | None. No dynamic blinds or occupant behaviour model. |
 
-Because no occupant blind operation is modelled, `culled_sDA` describes the bare performance of the envelope and canyon geometry. Values should be read as an optimistic bound relative to occupied conditions, where blinds would be deployed in response to the glare risk visible in the ASE columns.
+Because no blind operation is modelled, sDA describes the bare performance of the room and street geometry. It is an upper bound relative to occupied conditions, where blinds would be used in response to direct sun.
 
 ---
 
+## Scope and limitations
 
-## Scope and limitations of the dataset
-
-- Single-side-lit rectangular rooms with one centred window only; no corner units, multi-aspect dwellings or multiple apertures.
-- Opposing obstructions are modelled as continuous uniform extrusions (semi-infinite canyon), not porous real-world urban fabric with staggered heights, setbacks or intersections.
-- Surface reflectances and glazing transmittance are fixed at the values listed above; darker finishes or lower-transmittance glazing would depress the results further.
-- No dynamic shading or occupant behaviour model.
-
+- Single-side-lit rectangular rooms with one centred window; no corner units, multi-aspect dwellings or multiple windows.
+- Opposing buildings are continuous uniform extrusions, and the room is at ground-floor level. Real streets are porous, and upper floors see more sky.
+- Street aspect ratio is sampled at 0.0, 0.5, 1.0 and 1.5 only.
+- Two climates at the same latitude.
+- Interior reflectances are fixed. Glazing transmittance is varied only in Batch C.
+- Eye-height values are photopic illuminance, not melanopic equivalent daylight illuminance.
 
 ## Licence
 
-Code is MIT ([LICENSE](LICENSE)). Data, figures and documentation are CC BY 4.0
-([LICENSE-DATA](LICENSE-DATA)). Attribution is required for both.
+Code is MIT ([LICENSE](LICENSE)). Data, figures and documentation are CC BY 4.0 ([LICENSE-DATA](LICENSE-DATA)). Attribution is required for both.
 
 ## Acknowledgements
 
-Simulation uses [Radiance](https://www.radiance-online.org/) through
-[Ladybug Tools](https://www.ladybug.tools/) inside [Grasshopper 3D](https://www.grasshopper3d.com/)
+Simulation uses [Radiance](https://www.radiance-online.org/) through [Ladybug Tools](https://www.ladybug.tools/) in [Grasshopper](https://www.grasshopper3d.com/).
 
 ## Citation
 
-*[Citation and DOI to be added on acceptance.]*
+*Citation and DOI to be added on acceptance.*

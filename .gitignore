@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.tmp.png
+.DS_Store
+# generated images: publish as a release asset (da-grids.zip) instead of committing
+study/da-grids/**/*.png
